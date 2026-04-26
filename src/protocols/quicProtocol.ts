@@ -1,11 +1,12 @@
 import type { transportClient } from "./transportClient.js";
-import { QUICClient, createQuicConfig } from "@matrixai/quic";
+import { QUICClient, QUICSocket } from "@matrixai/quic";
 import { readFileSync } from "node:fs";
 
 export class quicProtocol implements transportClient{
     readonly protocolName = "QUIC";
     private client: QUICClient | null = null;
-    private stream: any = null 
+    private socket: QUICSocket | null = null; 
+    private stream: any = null;
     private host: string;
     private port: number;
 
@@ -17,23 +18,26 @@ export class quicProtocol implements transportClient{
 
     //Подключение
     async connect(): Promise<void> {
-        if(this.client?.started) return;
-        
-        //Создаем конфиг
-        const config = createQuicConfig({
-            ca: readFileSync("ca.crt"),
-        });
+        try{
+            //С начало создаем сокет
+            this.socket = new QUICSocket();
+            await this.socket.start();
 
-        this.client = new QUICClient({
-            config,
-            host: this.host,
-            port: this.port
-        });
+            //Создаем клиента
+            this.client = await QUICClient.createQUICClient({
+                host: this.host,
+                port: this.port,
+                socket: this.socket,
+            });
 
-        await this.client.start();
+            this.stream = await this.client.connection.newStream();
 
-        this.stream = await this.client.createStream();
-        console.log(`[QUIC] Соединение и поток открыты на ${this.host}:${this.port}`);
+            
+            console.log(`[QUIC] Соединение и поток открыты на ${this.host}:${this.port}`);
+        } catch(err){
+            console.error("[QUIC] Ошибка при чтении сертификатов или подключении: ", err);
+            throw err;
+        } 
     }
 
     async send(data: Buffer): Promise<void>{
@@ -42,7 +46,10 @@ export class quicProtocol implements transportClient{
         }
 
         
-        this.stream.write(data);
+        // Обычно это WritableStream
+        const writer = this.stream.writable.getWriter();
+        await writer.write(data);
+        writer.releaseLock();
         console.log(`[QUIC] Отправлено ${data.length} байт`);
     }
 
