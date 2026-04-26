@@ -1,0 +1,37 @@
+{
+  "compilerOptions": {
+    "target": "esnext",
+    "module": "nodenext",
+    "moduleResolution": "nodenext", // Корректная работа NodeNext
+    // Пути: где код и куда собирать
+    "rootDir": "./src",
+    "outDir": "./dist",
+
+    // Настройки типов
+    "types": ["node"], // Укажи явную поддержку Node.js
+    "skipLibCheck": true,
+    "sourceMap": true,
+    
+    // Декларации 
+    "declaration": true,
+    "declarationMap": true,
+
+    // Строгие проверки 
+    "strict": true,
+    "noUncheckedIndexedAccess": true, // Защита от undefined при обращении к массивам по индексу
+    "exactOptionalPropertyTypes": true,
+
+    // Модульность
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    
+    // Работа с Реактом
+    "jsx": "react-jsx", 
+    
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
