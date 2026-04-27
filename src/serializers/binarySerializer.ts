@@ -1,4 +1,4 @@
-import type { Stats } from "@matrixai/quic/native/types.js";
+//import type { Stats } from "@matrixai/quic/native/types.js";
 import type { serializerClient } from "./serializerClient.js";
 import { stat, writeFile, mkdir } from "node:fs/promises";
 import { readFile } from "node:fs/promises";
@@ -19,7 +19,7 @@ export class binarySerializer implements serializerClient{
             } 
                 
         } catch(err){
-            console.error("Ошибка при чтении данных", err);
+            console.error("[Binary] Ошибка при чтении данных", err);
             throw err;
         }
         return {type: "text", value: input};
