@@ -126,9 +126,9 @@ export class binarySerializer implements serializerClient{
             //Записываем буфер на диск
             await writeFile(filePath, payload);
 
-            console.log(`[Storage] Файл успешно сохранен: ${filePath}`);
+            console.log(`[StorageBin] Файл успешно сохранен: ${filePath}`);
         } catch(err){
-            throw new Error(`[Storage] Ошибка при сохранении файла: ${err}`);
+            throw new Error(`[StorageBin] Ошибка при сохранении файла: ${err}`);
         }
     }
 }
