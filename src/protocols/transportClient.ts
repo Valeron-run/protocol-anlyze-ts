@@ -9,6 +9,9 @@ export interface transportClient{
     //Возвращает promise так как отправка асинхронная операция
     send(data: Buffer): Promise<void>;
 
+    //Метод постоянного прослушивания сервера (Принимает буфер, вовзращает сообщение)
+    onMessage(handler: (data: Buffer) => void): void;
+
     //Метод для закрытия соединения
     close(): Promise<void>;
 }

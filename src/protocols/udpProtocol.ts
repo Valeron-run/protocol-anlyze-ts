@@ -7,12 +7,16 @@ export class udpProtocol implements transportClient{
     private host: string; 
     private port: number;
     private client = dgram.createSocket("udp4");
-
+    private handler?: (data: Buffer) => void;
 
     //Конструктор без параметов(default)/ И конструктор с параметрами(можно изменить, если клиенту понадобиться определенная отправка) 
     constructor(port: number = 8080, host: string = "localhost"){
         this.host = host;
         this.port = port;
+
+        this.client.on("message", (msg, rinfo) => {
+            if(this.handler) this.handler(msg);
+        });
     }
 
     //Оставляем реализацию метода пустым, так как соединение с сервером нам не нужно
@@ -29,6 +33,11 @@ export class udpProtocol implements transportClient{
                 resolve();
             })
         })
+    }
+
+    //Callback метод принятия сообщения от сервера
+    onMessage(handler: (data: Buffer) => void): void {
+        this.handler = handler;
     }
 
     //Реализация метода закрытия порта

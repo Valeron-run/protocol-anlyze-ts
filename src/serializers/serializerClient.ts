@@ -7,4 +7,5 @@ export interface serializerClient{
 
     //Метод для де-сериализации(обратного перевода строки в исходный вид)
     deserialize(buffer: Buffer): Promise<any>;
+
 }
