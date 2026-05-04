@@ -17,7 +17,9 @@ interface File{
 
 export class jsonSerialize implements serializerClient{
     readonly serializeName = "json";
-  
+    private FORMAT_JSON: number = 0x04;
+
+
     async parseDataToJson(input: string):Promise<string>{
         try{
             const stats = await stat(input).catch(() => null);
@@ -34,7 +36,7 @@ export class jsonSerialize implements serializerClient{
                 return JSON.stringify(file);
             }
         } catch(err: any) {
-            throw new Error(`[JSON] Ошибка при чтении данных:${err.message}`);
+            throw new Error(`>>>[JSON] Ошибка при чтении данных:${err.message}`);
         }
         const text: Message = {
             type: "TEXT",
@@ -54,14 +56,15 @@ export class jsonSerialize implements serializerClient{
             const buffer = Buffer.from(stringJson, "utf-8");
             const bufferLen = buffer.length;
 
-            //Создаем буфер заголовка(4 байта на хранение длинны)
-            const headerBuffer = Buffer.alloc(4);
-            headerBuffer.writeInt32BE(bufferLen, 0);
+            //Создаем буфер заголовка(1 байт на формат данных и 4 байта на хранение длинны)
+            const headerBuffer = Buffer.alloc(5);
+            headerBuffer.writeInt8(this.FORMAT_JSON, 0)
+            headerBuffer.writeInt32BE(bufferLen, 1);
 
             //Возвращаем склеенные буферные данные(4байт заголовок + н байт полезная нагрузка)
             return Buffer.concat([headerBuffer, buffer]);
         } catch(err){
-            throw new Error(`[JSONser] Ошибка при сохранении файла: ${err}`);
+            throw new Error(`>>>[JSON] Ошибка при сохранении файла: ${err}`);
         }
     }  
     
@@ -98,11 +101,11 @@ export class jsonSerialize implements serializerClient{
 
             await writeFile(filePath, fileBuffer);
 
-            console.log(`[StorageJSON] Файл успешно сохранен: ${filePath}`);
+            console.log(`>>>[StorageJSON] Файл успешно сохранен: ${filePath}`);
 
             return filePath;
         } catch(err){
-            throw new Error(`[StorageJSON] Ошибка при сохранении файла: ${err}`);
+            throw new Error(`>>>[StorageJSON] Ошибка при сохранении файла: ${err}`);
         }
     }
 }

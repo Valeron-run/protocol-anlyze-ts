@@ -9,9 +9,6 @@ import type { transportClient } from './protocols/transportClient.js';
 
 async function client(): Promise<void>{
     const rl = readline.createInterface({input, output});
-    const jsSerializer = new jsonSerialize();
-    const binSerializer = new binarySerializer();
-    const uProtocol = new udpProtocol();
     try{
         console.log(menu());
         while(true){
@@ -19,8 +16,8 @@ async function client(): Promise<void>{
             switch(command.toLowerCase()){
                 case "1": 
                 case "выбрать протокол":
-                    console.log(chooseProtocol());
-                    await shipment();
+                    //console.log(chooseProtocol());
+                    await shipment(rl);
                     break;
                 case "2": 
                 case "cправка протоколов":
@@ -32,7 +29,7 @@ async function client(): Promise<void>{
                     break;
                 case "4": 
                 case "отправить сообщение разом всеми протоколами(анилиз)":
-                    const message: string = await rl.question("\nВыбери сообщение");
+                    const message: string = await rl.question("\nВыбери сообщение: ");
                     await analyze(message);
                     break
                 case "5":
@@ -52,49 +49,39 @@ async function client(): Promise<void>{
 }
 
 //Реализация отправки сообщения пользователям (мессенджер)
-async function shipment(): Promise<void> {
-    let serialize: serializerClient;
-    let protocol: transportClient;
-    const rl = readline.createInterface({input, output});
-
+async function shipment(rl: readline.Interface): Promise<void> {
     //Выбор протокола
     const commandForProtocol: string = await rl.question("Выбери метод отправки (TCP/UDP): \n"
                                                + "1) TCP\n"
                                                + "2) UDP\n");
-    if(commandForProtocol === "1" || commandForProtocol.toLowerCase() === "tcp"){
-        protocol = new tcpProtocol();
-    } else if(commandForProtocol === "2" || commandForProtocol.toLowerCase() === "udp"){
-        protocol = new udpProtocol();
-    } else {
-        console.log("Неравильная команда, будет выбран TCP протокол");
-        protocol = new tcpProtocol();
-    }
+    //Возможно понадобиться обьект - маппер
+    //Тернальный оператор - в случае если будет не выбрана цифра или они будет другая, автоматически упадет выбор на UDP протокол
+    const protocol: transportClient = (commandForProtocol.toLowerCase() === "tcp" || commandForProtocol === "1") ? new tcpProtocol() : new udpProtocol()
     
     //Выбор сериализатора
     const commandForSerialize: string = await rl.question("Выбери метод отправки (JSON/Binary): \n"
                                                + "1) JSON\n"
                                                + "2) Binary\n");
-    if(commandForSerialize === "1" || commandForSerialize.toLowerCase() === "json"){
-        serialize = new jsonSerialize();
-    } else if(commandForSerialize === "2" || commandForSerialize.toLowerCase() === "binary"){
-        serialize = new binarySerializer();
-    } else {
-        console.log("Неравильная команда, будет выбран бинарный сериализатор");
-        serialize = new binarySerializer();
-    }
+    //Тернальный оператор - в случае если не будет выбрана цифра, автоматически выбереться бинарный протокол
+    const serialize: serializerClient = (commandForSerialize.toLowerCase() === "json" || commandForSerialize === "1") ? new jsonSerialize() : new binarySerializer();
+    
     try{
-        await protocol.connect();
-        console.log(`[Клиент] Используется протокол ${protocol.protocolName}`);  
-        console.log(`[Клиент] Используется сериализатор ${serialize.serializeName}`); 
+        await protocol.connect().then(() => {
+            console.log(">>>[Client] Успешное подключение к серверу");
+        });
+        console.log(`>>>[Client] Используется протокол ${protocol.protocolName}`);  
+        console.log(`>>>[Client] Используется сериализатор ${serialize.serializeName}`); 
         
-        //Постоянно слушаем клиента
+        //Постоянно слушаем сервер
         protocol.onMessage(async (bufferFromBuffer: Buffer) => {
             try{
                 //Десериализируем ответ от сервера
-                const decodedResponce = await serialize.deserialize(bufferFromBuffer);
-                console.log(`\n[Сервер прислал ответ]:`, decodedResponce);
+                const message: string = await onMessageReceived(bufferFromBuffer);
+                if(message.length !== 0 || message !== ""){
+                    console.log(`\n[Server]: ${message}`);
+                }
             } catch(err){
-                console.error("[Ошибка принятия сообщения] Не удалось разобрать ответы от сервера");
+                console.error("[Client error] Не удалось разобрать ответы от сервера");
             }
         });
 
@@ -114,18 +101,119 @@ async function shipment(): Promise<void> {
             console.log(">>> Пакет отправлен");
         }
     } catch(err: any){
-        throw new Error(`[Клиент] соединение ${protocol.protocolName} завершено ${err.message}`);
-    } finally {
-        rl.close();
+        throw new Error(`>>>[Client] соединение ${protocol.protocolName} завершено ${err.message}`);
     }
 }
 
 //Реализация отпраки одного сообщения всеми методами разом
 async function analyze(data: string): Promise<void>{
+    const protocolTCP: transportClient = new tcpProtocol();
+    const protocolUDP: transportClient = new udpProtocol();
+    const serializeJSON: serializerClient = new jsonSerialize();
+    const serializeBinary: serializerClient = new binarySerializer();
 
+    //Подготовка данных(сериализируем данные для отправки по протоколу)
+    const [jsonPayload, binaryPayload] = await Promise.all([
+        serializeJSON.serialize(data),
+        serializeBinary.serialize(data),
+    ]);
+
+    //Вспомогательная функция ( для реализации одновременного подключения и прослушивания серверов)
+    const setupProtocol = async(proto: transportClient) => {
+        await proto.connect();
+        console.log(`>>>[Client] Успешное подключение к ${proto.protocolName} серверу`);
+
+        proto.onMessage(async (bufferFromBuffer: Buffer) => {
+            try{
+                const message: string = await onMessageReceived(bufferFromBuffer);
+                if(message.length !== 0 || message !== ""){
+                    console.log(`\n[Server  ${proto.protocolName}]: ${message}`);
+                }
+            } catch (err){
+                console.error(">>>[Client error] Не удалось разобрать ответы от сервера");
+            }
+        });
+    }
+    //Вспомогальная функция для подсчета времени
+    const measureFullRoundTrip = async (proto: transportClient, buffer: Buffer, label: string) => {
+        return new Promise<{ label: string, time: number }>((resolve) => {
+            const start = performance.now();
+
+            // 1. Устанавливаем временный обработчик ответа специально для замера
+            proto.onMessage(function handler(response: Buffer) {
+                const end = performance.now();
+            
+                // Нам нужен только первый ответ для замера, поэтому можно либо 
+                // почистить слушатель, либо просто резолвить
+                resolve({ label, time: end - start });
+            });
+
+            // 2. Отправляем данные
+            proto.send(buffer).catch(err => {
+                console.error(`Ошибка при замере ${label}:`, err);
+                });
+        });
+    };
+
+
+    const runAnalisis = async (jsonBuffer: Buffer, binBuffer: Buffer) => {
+        try{
+            const iterations = 10;
+            const stats = {
+                "TCP + JSON": 0,
+                "TCP + Binary": 0,
+                "UDP + JSON": 0,
+                "UDP + Binary": 0
+            };
+
+            console.log(`>>>[Client Anlyze] Запуск теста: ${iterations} итераций...`);
+
+            for (let i = 0; i < iterations; i++) {
+                const results = [
+                    await measureFullRoundTrip(protocolTCP, jsonBuffer, "TCP + JSON"),
+                    await measureFullRoundTrip(protocolTCP, binBuffer, "TCP + Binary"),
+                    await measureFullRoundTrip(protocolUDP, jsonBuffer, "UDP + JSON"),
+                    await measureFullRoundTrip(protocolUDP, binBuffer, "UDP + Binary")
+                ];
+        
+                results.forEach(res => {
+                    stats[res.label as keyof typeof stats] += res.time;
+                });
+            }
+
+            // Считаем среднее
+            const finalTable = Object.entries(stats).map(([label, totalTime]) => ({
+                label,
+                averageTime: (totalTime / iterations).toFixed(4) + " мс"
+            }));
+
+            console.table(finalTable); 
+        }catch(err){
+            console.error("Ошибка при массовой отправке:", err);
+        }
+    } 
+
+    
+    try{
+        //Ожидаем подключения к серверу
+        await Promise.all([
+            setupProtocol(protocolTCP),
+            setupProtocol(protocolUDP),
+        ]);
+
+        await runAnalisis(jsonPayload, binaryPayload);
+        console.log("Ждем ответы от серверов...");
+        await new Promise(resolve => setTimeout(resolve, 3000)); 
+    } catch(err){
+        console.error(">>>[Client error] Критическая ошибка анализа:", err);
+    } finally {
+        setTimeout(() => {
+            protocolTCP.close();
+            protocolUDP.close();
+        }, 5000)
+    }
+    
 }
-
-
 
 function menu(): string{
     return ("---Доступные команды---\n" +
@@ -151,5 +239,29 @@ function referenceProtocol(): void {
         { Протокол: "gRPC", Надежность: "Высокая", Скорость: "Высокая", Особенности: "Бинарное сжатие (HTTP/2)" },
         { Протокол: "QUIC", Надежность: "Высокая", Скорость: "Высокая", Особенности: "Устойчив к смене сети (UDP-based)" },
     ]);
+}
+//Функция для определенния формата передаваемых данных(Бинарные/JSON)
+async function onMessageReceived(fullBufer: Buffer): Promise<string>{
+    if(fullBufer.length === 0){ return "" ;}//Если буфер пустой, отдаем пустое сообщение
+    const format: number = fullBufer.readInt8(0);
+
+    let result: string = "";
+
+    try{
+        if(format === 0x04){
+            const serialize = new jsonSerialize();
+            const payload: Buffer = fullBufer.subarray(1);
+            result = await serialize.deserialize(payload);
+        } else if(format === 0x03){
+            const serialize = new binarySerializer();
+            const payload: Buffer = fullBufer.subarray(1);
+            result = await serialize.deserialize(payload);
+        }
+    } catch (err) {
+        console.error(`[Server] Ошибка десериализации: ${err}`);
+    }
+    
+
+    return result;
 }
 client();

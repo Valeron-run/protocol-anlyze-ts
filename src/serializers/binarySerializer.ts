@@ -1,6 +1,6 @@
 //import type { Stats } from "@matrixai/quic/native/types.js";
 import type { serializerClient } from "./serializerClient.js";
-import { stat, writeFile, mkdir } from "node:fs/promises";
+import { writeFile, mkdir } from "node:fs/promises";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import path from "node:path";
@@ -9,20 +9,14 @@ type DataType = {type: "text", value: string} | { type: "file", path: string};
 
 export class binarySerializer implements serializerClient{
     readonly serializeName = "binary";
-
+    private FORMAT_BIN: number = 0x03;
     //Проверка типа передаваемого сообщения
     private async searchDataType(input: string): Promise<DataType> {
-        try{
-            const stats = await stat(input);
-            if(stats.isFile()){
-                return { type: "file", path: input};
-            } 
-                
-        } catch(err){
-            console.error("[Binary] Ошибка при чтении данных", err);
-            throw err;
-        }
-        return {type: "text", value: input};
+        if(await this.isFilePath(input)){
+            return { type: "file", path: input};
+        } else {
+            return {type: "text", value: input};
+        } 
     }
 
     //Сериализация сообщения - парсим тип передаваемого сообщения, далее создаем метаданные и возвращаем передаваемый обьект
@@ -38,7 +32,7 @@ export class binarySerializer implements serializerClient{
                 const textBuffer = Buffer.from(data, "utf-8");
                 return this.parseMetaData(textBuffer, "text", "");
             default:
-                throw new Error("Ошибка при сериализации");
+                throw new Error(">>>[Deserializer] Ошибка при сериализации");
         }
     }
 
@@ -66,20 +60,25 @@ export class binarySerializer implements serializerClient{
         switch(bufferType){
             //Собираем данные для файла
             case 0x01:
-                console.log("[Deserializer] Обнаружен файл.");
+                console.log(">>>[Deserializer] Обнаружен файл.");
                 await this.saveFile(inputData, fileName);
                 return `File saved to ./download/${fileName}`;
             //Собираем данные для строки
             case 0x02:
-                console.log("[Deserializer] Обнаружен текст.");
+                console.log(">>>[Deserializer] Обнаружен текст.");
                 return inputData.toString("utf-8");
             default:
-                throw new Error("Ошибка при десериализации");
+                throw new Error(">>>[Deserializer] Ошибка при десериализации");
         }
     }
 
     //Пакует сообещния в метаданные
-    //Формат [1 байт] - тип сообщения, [4 байта] - длинна, [n байт] - само сообщение
+    //Формат:
+    // [1 байт] - формат данных(бинарные/ джинсон)
+    // [1 байт] - тип сообщения, 
+    // [1 байт] - длина имени, 
+    // [n байт] - имя файла, 
+    // [n байт] - само сообщение
     async parseMetaData(data: Buffer, type: "file" | "text", fileName: string = ""): Promise<Buffer>{
         //Длинна самого сообщения
         const dataLength: number = data.length;
@@ -89,13 +88,15 @@ export class binarySerializer implements serializerClient{
         const fileNameLength: number = fileNameBuffer.length;
 
         //Создаем буфер заголовка:
-        // 1 (тип) + 1 (длина имени) + fileNameLength (само имя) + 4 (длина контента)
-        const header = Buffer.alloc(1 + 1 + fileNameLength + 4);
+        const header = Buffer.alloc(1 + 1 + 1 + fileNameLength + 4);
 
         let offset: number = 0;
 
+        //Записываем формат данных
+        header.writeInt8(this.FORMAT_BIN, 0);
+        offset++;
         //Записываем тип
-        header.writeUInt8(type === "file" ? 0x01 : 0x02, 0);
+        header.writeUInt8(type === "file" ? 0x01 : 0x02, offset);
         offset++;
         //Записываем длинну имени
         header.writeUInt8(fileNameLength, offset);
@@ -109,9 +110,7 @@ export class binarySerializer implements serializerClient{
         return Buffer.concat([header, data]);
 
     }
-    async unpackMetaData(input: Buffer): Promise<void>{
-        
-    }
+    //Функция создания директории и сохранения файла в исходном формате
     async saveFile(payload: Buffer, fileName: string): Promise<void>{
         const dowloadDir: string = "./download";
 
@@ -126,9 +125,19 @@ export class binarySerializer implements serializerClient{
             //Записываем буфер на диск
             await writeFile(filePath, payload);
 
-            console.log(`[StorageBin] Файл успешно сохранен: ${filePath}`);
+            console.log(`>>>[StorageBin] Файл успешно сохранен: ${filePath}`);
         } catch(err){
-            throw new Error(`[StorageBin] Ошибка при сохранении файла: ${err}`);
+            throw new Error(`>>>[StorageBin] Ошибка при сохранении файла: ${err}`);
         }
+    }
+    async isFilePath(str: string): Promise<boolean> {
+        // Простая проверка на наличие слэшей или расширения файла
+        const hasDirectory = str.includes('/') || str.includes('\\');
+        const hasExtension = /\.[0-9a-z]{1,5}$/i.test(str);
+  
+        // Путь часто начинается с ./ или ../
+        const isRelative = /^\.\.?\//.test(str);
+
+        return hasDirectory || hasExtension || isRelative;
     }
 }

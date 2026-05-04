@@ -1,5 +1,5 @@
 import type { transportClient } from "./transportClient.js";
-import { QUICClient, QUICSocket } from "@matrixai/quic";
+import quic from "node:quic";
 import { readFileSync } from "node:fs";
 
 export class quicProtocol implements transportClient{
@@ -9,7 +9,7 @@ export class quicProtocol implements transportClient{
     private stream: any = null;
     private host: string;
     private port: number;
-
+    private alpn = "foo";
     //Динамический конструктор quicProtocol(изначально порты и хост задан, есть возможность менять)
     constructor(port: number = 9090, host:string = "localhost"){
         this.host = host;

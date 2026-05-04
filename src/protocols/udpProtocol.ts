@@ -25,11 +25,11 @@ export class udpProtocol implements transportClient{
     
     //Реализация метода send Интерфейса transportClient
     async send(data: Buffer): Promise<void>{
-        console.log(`[UDP] Отправка ${data.length} байт на ${this.port}:${this.host}...`);
+        console.log(`>>>[UDP] Отправка ${data.length} байт на ${this.port}:${this.host}...`);
         return new Promise((resolve, reject) => {
             this.client.send(data, this.port, this.host, (err) => {
                 if(err) return reject(err);
-                console.log("Пакет отправлен");
+                console.log(">>>[UDP] Пакет отправлен");
                 resolve();
             })
         })
@@ -43,6 +43,6 @@ export class udpProtocol implements transportClient{
     //Реализация метода закрытия порта
     async close(): Promise<void> {
         this.client.close(); //Закрытие порта
-        console.log("[UDP] порт закрыт");
+        console.log(">>>[UDP] порт закрыт");
     } 
 }
