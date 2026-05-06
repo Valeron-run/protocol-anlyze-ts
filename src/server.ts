@@ -1,5 +1,6 @@
-import dgram from "dgram";
-import * as net from "net";
+import dgram from "dgram"; //Библеотека для работы с UDP
+import * as net from "net"; //Библеотека работы с TCP
+import { QUICServer } from "@matrixai/quic";
 import type { serializerClient } from "./serializers/serializerClient.js";
 import type { transportClient } from "./protocols/transportClient.js";
 import { tcpProtocol } from "./protocols/tcpProtocol.js";
@@ -8,7 +9,7 @@ import { binarySerializer } from "./serializers/binarySerializer.js";
 async function server(): Promise<void>{
     const portTCP: number = 8081;
     const portUDP: number = 8080;
-    const host: string = "localhost";
+    const host: string = "0.0.0.0";
     const protocol: transportClient = new tcpProtocol();
     // TCP - server
     const serverTCP = net.createServer((socket: net.Socket) => {
@@ -30,7 +31,7 @@ async function server(): Promise<void>{
             console.error(`>>>[Server] Ошибка сокета: ${err.message}`);
         });
 
-    })
+    });
     
     serverTCP.listen(portTCP, host, () => console.log(">>>[Server] TCP Server on 8081"));
     
@@ -44,6 +45,7 @@ async function server(): Promise<void>{
         serverUDP.send("ACK", rinfo.port, rinfo.address);
     })
     serverUDP.bind(portUDP, () => console.log(">>>[Server] UDP Server on 8080"));
+
 }
 //Функция для определенния формата передаваемых данных(Бинарные/JSON)
 async function onMessageReceived(fullBufer: Buffer): Promise<string>{
