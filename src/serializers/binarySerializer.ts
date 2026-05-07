@@ -43,7 +43,7 @@ export class binarySerializer implements serializerClient{
         //Читаем первый бит данных(Тип сообщения)
         const bufferType: number = buffer.readUInt8(offset);
         offset++;
-        //Читаем первый бит данных(Длинна названия файла, если он есть)
+        //Читаем второй бит данных(Длинна названия файла, если он есть)
         const bufferNameFileLength: number = buffer.readUInt8(offset);
         offset++;
         //Читаем имя файла(если он есть)
